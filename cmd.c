@@ -38,7 +38,16 @@ static int coercetypes( XSQLDA* );
 static void ib_getval( XSQLVAR *var, char *buf );
 
 #define SQLDIALECT 3
+#define SQLDIALECTSTR "3"
 #define TCLDATEFORMAT 0
+
+#ifndef ISC_INT64_FORMAT
+#if (defined(_MSC_VER) && defined(WIN32))
+#define	ISC_INT64_FORMAT	"I64"
+#else
+#define	ISC_INT64_FORMAT	"ll"
+#endif
+#endif
 
 static char * ib_text2tcl( IB_Connection * con, char * s ) {
 	if( con->enc ) {
@@ -51,7 +60,6 @@ static char * ib_text2tcl( IB_Connection * con, char * s ) {
 };
 
 
-
 static char * ib_tcl2text( IB_Connection * con, char * s) {
 	if( con->enc ) {
 		Tcl_DStringFree( &(con->enc_buf) );
@@ -62,6 +70,31 @@ static char * ib_tcl2text( IB_Connection * con, char * s) {
 	}
 };
 
+
+/* ib_int64str( buf, (ISC_INT64 *) var->sqldata, var->sqlscale ) */
+
+static char * ib_int64str( char* buf, ISC_INT64* d, short dscale ) {
+    if( dscale < 0 ) {
+        ISC_INT64 tens = 1;
+        short i;
+        for( i = 0; i > dscale; i-- )
+            tens *= 10;
+        if( *d >= 0 )
+            sprintf( buf, "%" ISC_INT64_FORMAT "d.%0*" ISC_INT64_FORMAT "d",
+                (ISC_INT64) (*d / tens), -dscale, (ISC_INT64) (*d % tens) );
+        else if( (*d / tens) != 0 )
+            sprintf( buf, "%" ISC_INT64_FORMAT "d.%0*" ISC_INT64_FORMAT "d",
+                (ISC_INT64) (*d / tens), -dscale, (ISC_INT64) -(*d % tens) );
+        else
+            sprintf( buf, "%s.%0*" ISC_INT64_FORMAT "d",
+                "-0", -dscale, (ISC_INT64) -(*d % tens) );
+    } else if( dscale ) {
+        sprintf( buf, "%" ISC_INT64_FORMAT "d%0*d", (ISC_INT64) *d, dscale, 0 );
+    } else {
+        sprintf( buf , "%" ISC_INT64_FORMAT "d", (ISC_INT64) *d );
+    }
+    return buf;
+}
 
 
 static int ib_err( Tcl_Interp* ip, long **p ) {
@@ -168,7 +201,7 @@ int do_ib_open( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	l = 0;
 	dpb = NULL;
 
-	isc_expand_dpb( &dpb, &l, isc_dpb_user_name, usr, isc_dpb_password, pass, isc_dpb_sql_role_name, role, isc_dpb_sql_dialect, SQLDIALECT, NULL );
+	isc_expand_dpb( &dpb, &l, isc_dpb_user_name, usr, isc_dpb_password, pass, isc_dpb_sql_role_name, role, isc_dpb_sql_dialect, SQLDIALECTSTR, NULL );
 	dbh = 0L;
 	isc_attach_database( stat, strlen(db), db, &dbh, l, dpb );
 	if( stat[0]==1 && stat[1] ) {
@@ -182,7 +215,7 @@ int do_ib_open( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 		return ib_err( ip, &statp );
 	}
 
-        if( argc > 5 ) {
+	if( argc > 5 ) {
 		con->enc = Tcl_GetEncoding( ip, argv[5] );
 		if( !con->enc ) {
 			isc_commit_transaction( stat, &con->trh );
@@ -228,7 +261,7 @@ int do_ib_close( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	}
 
 	Tcl_DStringFree( &(con->enc_buf) );
-        if( con->enc )
+	if( con->enc )
 		Tcl_FreeEncoding( con->enc );
 
 	ib_del_conn_id( cd, argv[1] );
@@ -813,7 +846,13 @@ static void ib_getval( XSQLVAR *var, char *buf ) {
 				sprintf( buf, "%f", *d );
 				return;
 			}
-			
+
+   			case SQL_D_FLOAT: {
+				double *d = (double*)var->sqldata;
+				sprintf( buf, "%f", *d );
+				return;
+			}
+
 			case SQL_DATE: {
 				struct tm ctm;
 #if TCLDATEFORMAT
@@ -861,7 +900,16 @@ static void ib_getval( XSQLVAR *var, char *buf ) {
 #endif
 				return;
 			}
+
+            case SQL_INT64: {
+                ib_int64str( buf, (ISC_INT64*)var->sqldata, var->sqlscale );
+                return;
+            }
 			
+            case SQL_QUAD:
+                strcpy( buf, "Unsupported type QUAD" );
+                return;
+
 			default:
 				strcpy( buf, "Unsupported type" );
 				return;
@@ -898,6 +946,9 @@ static int coercetypes( XSQLDA* da ) {
 			case SQL_DOUBLE:
 				var->sqldata = (char*)ckalloc( sizeof(double)*1 );
 				break;
+			case SQL_D_FLOAT:
+				var->sqldata = (char*)ckalloc( sizeof(double)*1 );
+				break;
 			case SQL_DATE:
 				var->sqldata = (char*)ckalloc( sizeof(ISC_QUAD)*1 );
 				break;
@@ -907,6 +958,11 @@ static int coercetypes( XSQLDA* da ) {
 			case SQL_TYPE_TIME:
 				var->sqldata = (char*)ckalloc( sizeof(ISC_TIME)*1 );
 				break;
+            case SQL_INT64:
+				var->sqldata = (char*)ckalloc( sizeof(ISC_INT64)*1 );
+				break;
+            case SQL_QUAD:
+                return 1;
 			default:
 				return 1;
 		}

@@ -1,23 +1,27 @@
 #
 # Makefile for ibtcl
 #
-VERSION = ibtcl-01
-IBFLAGS = -I/usr/ibase/ib4.0-linux/include
-TCLFLAGC = 
+IBROOT=.
+TCLROOT=/opt/tcl
+TCLVER=8.6
+
+VERSION = ibtcl-011
+IBFLAGS = -I$(IBROOT)/include
+TCLFLAGS = -I$(TCLROOT)/include
 #DEBUGFLAGS = -ggdb
 CFLAGS = $(IBFLAGS) $(TCLFLAGS) $(DEBUGFLAGS)
 
-TCLLIB = -ltcl -lm -ldl
+TCLLIB = -L$(TCLROOT)/lib -ltcl$(TCLVER) -lm -ldl
+IBLIB = -L$(IBROOT)/lib -lfbclient
 # staticly linked IB lib
-#IBLIB = -L/usr/ibase/ib4.0-linux/lib -lgds
+#IBLIB = -L$(IBROOT)/lib -lgds
 # dynamicly linked IB lib
-IBLIB = -lgdslib
-
+#IBLIB = -lgdslib
 
 DISTR = COPYING Makefile Makefile.bor TODO cmd.c ibtcl.c ibtcl.h\
 		ibtcl.html ibtcl.txt ibtclInt.h ibtclsh.c id.c
 
-TARGETS = ibtclsh libibtcl.a
+TARGETS = ibtclsh libibtcl.a libibtcl.so
 
 OBJs=ibtcl.o cmd.o id.o
 
@@ -29,6 +33,9 @@ ibtclsh: $(OBJs) ibtclsh.o
 libibtcl.a: $(OBJs)
 	rm -f $@
 	ar cr $@ $^
+
+libibtcl.so: $(OBJs)
+        gcc -shared -o $@ $^ $(TCLLIB) $(IBLIB)
 
 $(OBJs): ibtclInt.h Makefile
 
