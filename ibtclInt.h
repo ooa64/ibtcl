@@ -40,6 +40,8 @@ typedef struct {
 	isc_db_handle dbh;
 	isc_tr_handle trh;
 	Tcl_HashTable stmt_hash;
+	Tcl_Encoding enc;
+	Tcl_DString enc_buf;
 } IB_Connection;
 
 typedef struct {
@@ -50,8 +52,6 @@ typedef struct {
 	XSQLDA *xd;
 } IB_Statement;
 
-
-int ibtcl_init( Tcl_Interp *interp );
 
 /* ibtcl functions themselves */
 int do_ib_test( ClientData, Tcl_Interp*, int, char** );

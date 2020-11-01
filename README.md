@@ -2,6 +2,14 @@
 
 Interbase/Firebird extension for Tcl.
 
+Changed 24.10.2015, version 0.1.1:
+
+        - Optional database role and encoding for the ib_open call.
+	- Uses UTF-8 conversions.
+	- Defines SQLDIALECT in cmd.c (3 by default).
+        - Defines TCLDATEFORMAT in cmd.c (string datetime instead of tcltime by default).
+        - Can be compiled on Windows, MSVC makefile included.
+
 Original from:
 
 http://ftp.uni-hannover.de/tcl/mirror/ftp.procplace.com/sorted/packages-8.0/databases/ibtcl/1.0/ibtcl-01.tar.gz

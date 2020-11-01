@@ -26,7 +26,10 @@ $Id: ibtcl.h,v 0.2 1998/11/02 07:50:06 coa Exp coa $
 
 #include <tcl.h>
 
-int ibtcl_init( Tcl_Interp *interp );
-int ibtcl_SafeInit( Tcl_Interp *interp );
+#undef TCL_STORAGE_CLASS
+#define TCL_STORAGE_CLASS DLLEXPORT
+
+EXTERN int Ibtcl_Init( Tcl_Interp *interp );
+EXTERN int Ibtcl_SafeInit( Tcl_Interp *interp );
 
 #endif

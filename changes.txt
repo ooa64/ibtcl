@@ -1,0 +1,13 @@
+original source at http://www.google.com.ua/search?q=ibtcl-01.tar.gz
+
+modified by oleg oleinick, ooa64@ua.fm
+
+was:	sql dialect 1
+now:	sql dialect 3
+
+was:	ib_open db user password
+now:	ib_open db user password ?role ?tclencoding??
+
+was:	DATE value from database is returned in seconds.
+now:	DATE value from database is returned in string.
+

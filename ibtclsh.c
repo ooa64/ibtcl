@@ -25,5 +25,5 @@
 static char const rcsid[] = "$Id: ibtclsh.c,v 0.1 1998/10/01 09:06:10 coa Exp $";
 
 main( int argc, char **argv ) {
-	Tcl_Main( argc, argv, ibtcl_init );
+	Tcl_Main( argc, argv, Ibtcl_Init );
 }

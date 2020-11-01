@@ -23,6 +23,9 @@
 #include <string.h>
 #include "ibtclInt.h"
 
+int ib_close_conn( Tcl_Interp *ip, IB_Connection *con );
+void ib_close_stmt( IB_Statement *s );
+
 static char const rcsid[] = "$Id: id.c,v 0.2 1998/10/01 14:18:49 coa Exp $";
 
 void ib_set_conn_id( IB_ClientData *cd, IB_Connection *connid ) {
@@ -71,7 +74,7 @@ void ib_del_conn_id( IB_ClientData *cd, char *id ) {
 		if( hent3 != NULL ) {
 			Tcl_DeleteHashEntry( hent3 );
 		}
-		ckfree( sid );
+		ckfree( (char *)sid );
 		hent2 = Tcl_NextHashEntry( &hsearch );
 	}
 

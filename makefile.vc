@@ -1,0 +1,263 @@
+# makefile.vc for nmake
+#
+# set TCLROOT and TCLVER to compile with Tcl 8.5/8.6
+# set IBROOT to the firebird or interbase root
+#
+# Possible uses are:
+#
+#  nmake -nologo -f makefile.vc [DEBUG=1]
+#      Makes a new style Stubs extension that doesn't need to resolve
+#      imports at loadtime and is NOT stuck to a tcl8X.dll by name.
+#
+#  nmake -nologo -f makefile.vc USE_TCL_STUBS=0 [DEBUG=1]
+#      Makes an old style extension needing tcl8X.dll by name.
+#
+#  nmake -nologo -f makefile.vc USE_TCL_STUBS=0 STATIC_BUILD=1 [DEBUG=1]
+#      Creates a static library.
+#
+#  nmake -nologo -f makefile.vc USE_TCL_STUBS=1 STATIC_BUILD=1 [DEBUG=1]
+#      Creates a static library that uses Stubs.  Technically this
+#      is legal, but why you might want this is the question.  Could
+#      allow for an addition layer of abstraction such that any
+#      other extension writing to the 'master' Stubs table will
+#      affect this extension too.
+#      [advanced topic for deep core hackers]
+#
+#  add STATIC_FB=1 and CUSTOM_FB=1 to link with static firebird library
+#  add THREADS=1 for full multithreading support
+#  add MSVCRT=1 to use dynamic MSVC runtime
+#
+
+LIBRARY = ibtcl
+DOTVERSION = 0.1.1
+VERSION = 011
+
+LIBRARY_OBJs = cmd.obj ibtcl.obj id.obj
+SHELL_OBJs = ibtclsh.obj
+SHELL_OBJs = ibtclAppInit.obj tclAppInit.obj 
+
+!ifndef TCLROOT
+TCLROOT = c:\tcl84
+!endif
+
+!ifndef TCLVER
+TCLVER = 84
+!endif
+
+!ifndef CUSTOM_FB
+CUSTOM_FB = 0
+!endif
+
+!ifndef STATIC_FB
+STATIC_FB = 0
+!endif
+
+!ifndef STATIC_BUILD
+STATIC_BUILD = 0
+!endif
+
+!ifndef USE_TCL_STUBS
+USE_TCL_STUBS = 1
+!endif
+
+!ifndef UNICODE
+UNICODE=0
+!endif
+
+!ifndef THREADS
+THREADS=0
+!endif
+
+!ifndef DIALOGS
+DIALOGS = 0
+!endif
+
+!ifndef DEBUG
+DEBUG = 0
+!endif
+
+!ifndef MSVCRT
+MSVCRT = 0
+!endif
+
+DBGX=
+DEFINES = -D__WIN32__ -DWIN32 -D_WINDOWS -DWINVER=0x0400 -D_CRT_SECURE_NO_WARNINGS
+
+!if $(UNICODE) != 0
+DEFINES = $(DEFINES) -DUNICODE -D_UNICODE
+!endif
+
+!if $(THREADS) != 0
+DBGX = t
+DEFINES = $(DEFINES) -DTCL_THREADS=1 -DUSE_THREAD_ALLOC=1
+!endif
+
+!if $(STATIC_BUILD) != 0
+DBGX = $(DBGX)s
+!endif
+
+!if $(USE_TCL_STUBS) != 0
+USESTUBS   = -DUSE_TCL_STUBS
+TCLSTUBLIB = tclstub$(TCLVER).lib
+!else
+USESTUBS   = 
+TCLSTUBLIB =
+!endif
+
+!if $(DEBUG) != 0
+DBG	   = d
+DBGX       = $(DBGX)g
+DBG_CFLAGS = -ZI -RTC1 -D_DEBUG -DDEBUG -DTCLCMD_DEBUG -DTCL_MEM_DEBUG
+DBG_LFLAGS = -debug -debugtype:cv -nodefaultlib:msvcrt
+#DBG_LFLAGS = -debug -debugtype:cv
+!else
+DBG	   =
+DBGX       = $(DBGX)
+DBG_CFLAGS = -O2 -Ot -Oi -fp:strict -Gs -GS -GL -DNDEBUG
+DBG_LFLAGS = -release -opt:ref -opt:icf,3 -ltcg
+!endif
+
+!if $(STATIC_BUILD) != 0
+USESTUBS= 
+EXT	= lib
+DEFINES	= $(DEFINES) -DSTATIC_BUILD
+#CFLAGS	= $(CFLAGS) -Zl
+!if $(MSVCRT) != 0
+DBGX    = $(DBGX)x
+!endif
+!else
+EXT	= dll
+DEFINES	= $(DEFINES) $(USESTUBS)
+CFLAGS	= $(CFLAGS) -LD
+DBGX    = $(DBGX)
+!endif
+
+!if $(MSVCRT) != 0
+CFLAGS	= $(CFLAGS) -MD$(DBG)
+!else
+CFLAGS	= $(CFLAGS) -MT$(DBG)
+LFLAGS  = $(LFLAGS) -nodefaultlib:msvcrt
+!endif
+
+!if $(CUSTOM_FB) 
+
+!if $(STATIC_BUILD) || $(STATIC_FB)
+!if $(DEBUG)
+LIBS=$(LIBS) lib\fbclient15sgx.lib lib\common15sgx.lib Ws2_32.lib Mpr.lib
+!else
+LIBS=$(LIBS) lib\fbclient15sx.lib lib\common15sx.lib Ws2_32.lib Mpr.lib
+!endif
+!else
+!if $(DEBUG)
+LIBS=$(LIBS) lib\fbclient15g.lib 
+!else
+LIBS=$(LIBS) lib\fbclient15.lib 
+!endif
+!endif
+
+!else
+
+LIBS=$(LIBS) $(IBROOT)\lib\fbclient_ms.lib
+
+!endif
+
+#CFLAGS	= $(CFLAGS) -W3 -WX $(DBG_CFLAGS)
+CFLAGS	= $(CFLAGS) -W3 $(DBG_CFLAGS)
+LFLAGS  = -machine:IX86 -subsystem:console -stack:2300000 $(LFLAGS) $(DBG_LFLAGS)
+
+TCLLIB = tcl$(TCLVER)$(DBGX).lib
+
+INCLUDES = $(INCLUDES) -I"$(TCLROOT)\include" -I"$(IBROOT)\include" -I.
+
+LIBS = $(LIBS) -libpath:"$(TCLROOT)\lib"
+
+!if $(USE_TCL_STUBS) != 0
+LIBS = $(LIBS) $(TCLSTUBLIB)
+!else
+LIBS = $(LIBS) $(TCLLIB)
+!endif
+
+!if $(DIALOGS) != 0
+LIBS = $(LIBS) comdlg32.lib 
+DEFINES = $(DEFINES) -DDIALOGS
+!endif
+
+!if $(TCLVER) >= 86
+LIBS = $(LIBS) Netapi32.lib
+!endif
+
+LIBS = $(LIBS) advapi32.lib user32.lib gdi32.lib winspool.lib
+
+TARGET = $(LIBRARY)$(VERSION)$(DBGX).$(EXT)
+TARGETLIB = $(LIBRARY)$(VERSION)$(DBGX).lib
+TARGETDLL = $(LIBRARY)$(VERSION)$(DBGX).dll
+SHELL = $(LIBRARY)sh$(VERSION)$(DBGX).exe
+
+#TCLSH = $(TCLROOT)\bin\tclsh$(TCLVER)$(DBGX).exe
+TCLSH == $(SHELL)
+
+all: $(TARGET)
+
+shell: $(SHELL)
+
+test: all
+	 $(TCLSH) test.tcl
+
+clean:
+	@-del *.obj
+	@-del *.exp
+	@-del *.idb
+	@-del *.ilk
+	@-del *.pdb
+	@-del *.res
+	@-del *.manifest
+	@-del $(TARGET)
+	@-del $(TARGETLIB)
+	@-del $(TARGETDLL)
+	@-del $(SHELL)
+
+install: all
+        -mkdir $(TCLROOT)\lib\$(LIBRARY)$(DOTVERSION)
+        echo y | xcopy /i $(TARGETLIB) $(TCLROOT)\lib
+        echo y | xcopy /i $(TARGETDLL) $(TCLROOT)\lib\$(LIBRARY)$(DOTVERSION)
+        echo y | xcopy /i pkgIndex.tcl $(TCLROOT)\lib\$(LIBRARY)$(DOTVERSION)
+
+$(TARGETLIB): $(LIBRARY_OBJs)
+	lib -nologo -ltcg -out:$@ $(LIBRARY_OBJs)
+
+$(TARGETDLL): $(LIBRARY_OBJs)
+	link -nologo -dll -out:$@ $(LFLAGS) $(TCLSTUBLIB) $(LIBS) $(LIBRARY_OBJs)
+
+$(SHELL): $(LIBRARY_OBJs) $(SHELL_OBJs) tclsh.res
+	link -nologo $(LFLAGS) -out:$@ $(LIBS) $(TCLLIB) $(SHELL_OBJs) $(LIBRARY_OBJs) tclsh.res 
+
+tclAppInit.obj: tclAppInit.c 
+	cl -nologo -c -EHsc $(INCLUDES) $(DEFINES) $(CFLAGS) /DTCL_LOCAL_APPINIT=Ibtcl_AppInit -Fo$@ $?
+
+ibtclAppInit.obj: ibtclAppInit.c 
+	cl -nologo -c -EHsc $(INCLUDES) $(DEFINES) $(USESTUBS) $(CFLAGS) -Fo$@ $?
+
+.rc.res:
+        rc -fo $@ -r -i $(TCLROOT)\include -D__WIN32__ \
+        -d DEBUG=$(DEBUG) \
+        -d TCL_THREADS=$(TCL_THREADS) \
+        -d STATIC_BUILD=$(STATIC_BUILD) \
+        -d MSVCRT=$(MSVCRT) \
+        $<
+
+.cpp.obj ::
+	cl -nologo -c -EHsc $(INCLUDES) $(DEFINES) $(CFLAGS) @<<
+$<
+<<
+
+.cc.obj ::
+	cl -nologo -c -EHsc $(INCLUDES) $(DEFINES) $(CFLAGS) @<<
+$<
+<<
+
+.c.obj ::
+	cl -nologo -c $(INCLUDES) $(DEFINES) $(CFLAGS) @<<
+$<
+<<
+
+.SUFFIXES: .cpp .cc .c .rc .res

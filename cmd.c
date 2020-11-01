@@ -19,6 +19,7 @@
 *
 */
 
+#include <malloc.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -31,8 +32,36 @@ typedef struct {
 
 static char const rcsid[] = "$Id: cmd.c,v 0.5 1999/01/06 07:27:11 coa Exp coa $";
 
+void ib_del_stmt_id( IB_ClientData *cd, char *id );
+
 static int coercetypes( XSQLDA* );
 static void ib_getval( XSQLVAR *var, char *buf );
+
+#define SQLDIALECT 3
+#define TCLDATEFORMAT 0
+
+static char * ib_text2tcl( IB_Connection * con, char * s ) {
+	if( con->enc ) {
+		Tcl_DStringFree( &(con->enc_buf) );
+		Tcl_ExternalToUtfDString( con->enc, s, -1, &(con->enc_buf) );
+		return Tcl_DStringValue( &(con->enc_buf) );
+	} else {
+		return s;
+	}
+};
+
+
+
+static char * ib_tcl2text( IB_Connection * con, char * s) {
+	if( con->enc ) {
+		Tcl_DStringFree( &(con->enc_buf) );
+		Tcl_UtfToExternalDString( con->enc, s, -1, &(con->enc_buf) );
+		return Tcl_DStringValue( &(con->enc_buf) );
+	} else {
+		return s;
+	}
+};
+
 
 
 static int ib_err( Tcl_Interp* ip, long **p ) {
@@ -86,10 +115,10 @@ void ib_close_stmt( IB_Statement *s ) {
 			XSQLVAR *var = &(s->xd->sqlvar[i]);
 			ckfree( var->sqldata );
 			if( var->sqltype & 1 ) {
-				ckfree( var->sqlind );
+				ckfree( (char *)var->sqlind );
 			}
 		}
-		ckfree( s->xd );
+		ckfree( (char *)s->xd );
 		s->xd = NULL;
 	}
 
@@ -111,22 +140,22 @@ ib_open database user password
 int do_ib_open( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	IB_ClientData* cd = (IB_ClientData*) cData;
 	IB_Connection *con;
-	char *db, *usr, *pass, *dpb;
+	char *db, *usr, *pass, *role, *dpb;
 	long stat[20], *statp = stat;
 	isc_db_handle dbh;
 	isc_tr_handle trh;
 	short l;
 
-	if( argc != 4 ) {
+	if( argc != 4 && argc != 5  && argc != 6 ) {
 		Tcl_AppendResult( ip, "ib_open: Wrong # of arguments\n",
-				"ib_open database user password", NULL );
+				"ib_open database user password ?role ?encoding??", NULL );
 		return TCL_ERROR;
 	}
 
 	con = (IB_Connection*) ckalloc( sizeof(IB_Connection) );
 
-	db = argv[1]; usr = argv[2]; pass = argv[3];
-	
+	db = argv[1]; usr = argv[2]; pass = argv[3]; role = argc > 4 ? argv[4] : NULL;
+
 	/* From InterBase API
 	l = 4;
 	con->dpb = t  = (char*)ckalloc( l*sizeof(char) );
@@ -139,19 +168,31 @@ int do_ib_open( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	l = 0;
 	dpb = NULL;
 
-	isc_expand_dpb( &dpb, &l, isc_dpb_user_name, usr, isc_dpb_password, pass, NULL );
+	isc_expand_dpb( &dpb, &l, isc_dpb_user_name, usr, isc_dpb_password, pass, isc_dpb_sql_role_name, role, isc_dpb_sql_dialect, SQLDIALECT, NULL );
 	dbh = 0L;
 	isc_attach_database( stat, strlen(db), db, &dbh, l, dpb );
 	if( stat[0]==1 && stat[1] ) {
-		ckfree( con );
+		ckfree( (char *)con );
 		return ib_err( ip, &statp );
 	}
 
 	trh = 0L;
 	if( isc_start_transaction( stat, &trh, 1, &dbh, 0, NULL ) ) {
-		ckfree( con );
+		ckfree( (char *)con );
 		return ib_err( ip, &statp );
 	}
+
+        if( argc > 5 ) {
+		con->enc = Tcl_GetEncoding( ip, argv[5] );
+		if( !con->enc ) {
+			isc_commit_transaction( stat, &con->trh );
+			ckfree( (char *)con );
+			return TCL_ERROR;
+		}
+	} else {
+		con->enc = NULL;
+	}
+	Tcl_DStringInit( &(con->enc_buf) );
 
 	con->dbh = dbh;
 	con->trh = trh;
@@ -186,11 +227,15 @@ int do_ib_close( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 		return TCL_ERROR;
 	}
 
+	Tcl_DStringFree( &(con->enc_buf) );
+        if( con->enc )
+		Tcl_FreeEncoding( con->enc );
+
 	ib_del_conn_id( cd, argv[1] );
 	res = ib_close_conn( ip, con );
 	if( res != TCL_OK ) return res;
 
-	ckfree( con );
+	ckfree( (char *)con );
 
 	return TCL_OK;
 }
@@ -208,8 +253,8 @@ int do_ib_exec( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	IB_Statement *st;
 	XSQLDA *xd;
 	isc_stmt_handle stmth;
-	long fstat, stat[20], *statp = stat;
-	int i, res;
+	long stat[20], *statp = stat;
+	int i;
 
 	if( argc != 3 ) {
 		Tcl_AppendResult( ip, "ib_exec: Wrong # of arguments\n",
@@ -240,29 +285,30 @@ int do_ib_exec( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	memset( xd, 0x0, XSQLDA_LENGTH(10) );
 	xd->version = SQLDA_VERSION1;
 	xd->sqln = 10;
-	if( isc_dsql_prepare( stat, &(con->trh), &stmth, 0, argv[2], 1, xd ) ) {
+
+	if( isc_dsql_prepare( stat, &(con->trh), &stmth, 0, ib_tcl2text( con, argv[2] ), SQLDIALECT, xd ) ) {
 		return ib_err( ip, &statp );
 	}
 
 	if( xd->sqld > xd->sqln ) {
 		int n = xd->sqld;
 		
-		ckfree( xd );
+		ckfree( (char *)xd );
 		xd = (XSQLDA*) ckalloc( XSQLDA_LENGTH(n) );
 		memset( xd, 0x0, XSQLDA_LENGTH(n) );
 		
 		xd->sqln = n;
 		xd->version = SQLDA_VERSION1;
-		isc_dsql_describe( stat, &stmth, 1, xd );
+		isc_dsql_describe( stat, &stmth, SQLDIALECT, xd );
 	}
 	
 
-	if( isc_dsql_execute( stat, &(con->trh), &stmth, 1, NULL )  ) {
+	if( isc_dsql_execute( stat, &(con->trh), &stmth, SQLDIALECT, NULL )  ) {
 		return ib_err( ip, &statp );
 	}
 
 	if( xd->sqld == 0 ) { /* It's not a select statement */
-		ckfree( xd );
+		ckfree( (char *)xd );
 		if( isc_dsql_free_statement( stat, &stmth, DSQL_drop ) ) {
 			return ib_err( ip, &statp );
 		}
@@ -272,10 +318,10 @@ int do_ib_exec( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 
 	if( coercetypes( xd ) ) {
 		for( i=0 ; i<xd->sqld ; ++i ) {
-			if( xd->sqlvar[i].sqldata != NULL ) ckfree( xd->sqlvar[i].sqldata );
-			if( xd->sqlvar[i].sqlind != NULL ) ckfree( xd->sqlvar[i].sqlind );
+			if( xd->sqlvar[i].sqldata != NULL ) ckfree( (char *)xd->sqlvar[i].sqldata );
+			if( xd->sqlvar[i].sqlind != NULL ) ckfree( (char *)xd->sqlvar[i].sqlind );
 		}
-		ckfree( xd );
+		ckfree( (char *)xd );
 		(void) isc_dsql_free_statement( stat, &stmth, DSQL_drop );
 
 		Tcl_AppendResult( ip, 
@@ -362,7 +408,7 @@ int do_ib_free_stmt( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 
 	ib_del_stmt_id( cd, argv[1] );
 	ib_close_stmt( st );
-	ckfree( st );
+	ckfree( (char *)st );
 
 	return TCL_OK;
 }
@@ -437,18 +483,18 @@ int do_ib_fetch( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 
 	Tcl_UnsetVar( ip, vp, 0 );
 	i = 0;
-	while( (fstat=isc_dsql_fetch( stat, &st->stmth, 1, st->xd)) == 0 ) {
+	while( (fstat=isc_dsql_fetch( stat, &st->stmth, SQLDIALECT, st->xd)) == 0 ) {
 
 		for( j=0 ; j<st->xd->sqld ; ++j ) {
 			ib_getval( &(st->xd->sqlvar[j]), buf );
 			
 			if( byname ) {
-				sprintf( vbuf, "%s(%s,%d)", vp, st->xd->sqlvar[j].aliasname, i );
+				sprintf( vbuf, "%s(%s,%d)", vp, ib_text2tcl( st->con, st->xd->sqlvar[j].aliasname ), i );
 			} else {
 				sprintf( vbuf, "%s(%d,%d)", vp, i, j );
 			}
 
-			if( Tcl_SetVar( ip, vbuf, buf, TCL_LEAVE_ERR_MSG ) == NULL ) {
+			if( Tcl_SetVar( ip, vbuf, ib_text2tcl( st->con, buf ), TCL_LEAVE_ERR_MSG ) == NULL ) {
 				return TCL_ERROR;
 			}
 		}
@@ -545,16 +591,17 @@ int do_ib_fetch2proc( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) 
 
 	Tcl_UnsetVar( ip, vp, 0 );
 	i = 0;
-	while( (fstat=isc_dsql_fetch( stat, &st->stmth, 1, st->xd)) == 0 ) {
+	while( (fstat=isc_dsql_fetch( stat, &st->stmth, SQLDIALECT, st->xd)) == 0 ) {
 		for( j=0 ; j<st->xd->sqld ; ++j ) {
 			if( byname ) {
-				sprintf( vbuf, "%s(%s)", vp, st->xd->sqlvar[j].aliasname );
+				sprintf( vbuf, "%s(%s)", vp, ib_text2tcl( st->con,st->xd->sqlvar[j].aliasname ));
 			} else {
 				sprintf( vbuf, "%s(%d)", vp, j );
 			}
 			
 			ib_getval( &(st->xd->sqlvar[j]), buf );
-			if( Tcl_SetVar( ip, vbuf, buf, TCL_LEAVE_ERR_MSG ) == NULL ) {
+
+			if( Tcl_SetVar( ip, vbuf, ib_text2tcl( st->con, buf ), TCL_LEAVE_ERR_MSG ) == NULL ) {
 				return TCL_ERROR;
 			}
 		}
@@ -605,7 +652,7 @@ int do_ib_skip( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	}
 
 	for( i=0 ; i<num ; ++i ) {
-		if( (fstat=isc_dsql_fetch( stat, &st->stmth, 1, st->xd)) != 0 ) {
+		if( (fstat=isc_dsql_fetch( stat, &st->stmth, SQLDIALECT, st->xd)) != 0 ) {
 			if( fstat!=100 ) {
 				return ib_err( ip, &statp );
 			}
@@ -646,7 +693,7 @@ int do_ib_fieldname( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 		return TCL_ERROR;
 	}
 
-	Tcl_AppendResult( ip, st->xd->sqlvar[col].aliasname, NULL );
+	Tcl_AppendResult( ip, ib_text2tcl( st->con, st->xd->sqlvar[col].aliasname ), NULL );
 
 	return TCL_OK;
 }
@@ -696,7 +743,7 @@ int do_ib_test( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 		return TCL_ERROR;
 	}
 
-	p = Tcl_GetVar( ip, argv[1], TCL_LEAVE_ERR_MSG );
+	p = (char *)Tcl_GetVar( ip, argv[1], TCL_LEAVE_ERR_MSG );
 	if( p == NULL ) {
 		return TCL_ERROR;	
 	}
@@ -769,11 +816,49 @@ static void ib_getval( XSQLVAR *var, char *buf ) {
 			
 			case SQL_DATE: {
 				struct tm ctm;
+#if TCLDATEFORMAT
 				time_t sec;
 				isc_decode_date( (ISC_QUAD*)var->sqldata, &ctm );
 				ctm.tm_isdst = 0;
 				sec = mktime( &ctm );
 				sprintf( buf, "%ld", sec );
+#else
+				isc_decode_date( (ISC_QUAD*)var->sqldata, &ctm );
+				sprintf( buf, "%04d-%02d-%02d %02d:%02d:%02d", ctm.tm_year+1900, ctm.tm_mon+1, ctm.tm_mday, ctm.tm_hour, ctm.tm_min, ctm.tm_sec );
+#endif
+				return;
+			}
+
+			case SQL_TYPE_DATE: {
+				struct tm ctm;
+#if TCLDATEFORMAT
+				time_t sec;
+				isc_decode_sql_date( (ISC_DATE*)var->sqldata, &ctm );
+				ctm.tm_isdst = 0;
+				sec = mktime( &ctm );
+				sprintf( buf, "%ld", sec );
+#else
+				isc_decode_sql_date( (ISC_DATE*)var->sqldata, &ctm );
+				sprintf( buf, "%04.4d-%02.2d-%02.2d", ctm.tm_year+1900, ctm.tm_mon+1, ctm.tm_mday );
+#endif
+				return;
+			}
+
+			case SQL_TYPE_TIME: {
+				struct tm ctm;
+#if TCLDATEFORMAT
+				time_t sec;
+				isc_decode_sql_time( (ISC_TIME*)var->sqldata, &ctm );
+				ctm.tm_isdst = 0;
+				ctm.tm_year = 70;
+				ctm.tm_mon = 0;
+				ctm.tm_mday = 1;
+				sec = mktime( &ctm );
+				sprintf( buf, "%ld", sec );
+#else
+				isc_decode_sql_time( (ISC_TIME*)var->sqldata, &ctm );
+				sprintf( buf, "%02.2d:%02.2d:%02.2d", ctm.tm_hour, ctm.tm_min, ctm.tm_sec );
+#endif
 				return;
 			}
 			
@@ -791,16 +876,15 @@ static int coercetypes( XSQLDA* da ) {
 	XSQLVAR* var;
 	int i;
 	short dtype;
-
-
+        
 	for( i=0, var = da->sqlvar ; i<da->sqld ; ++i, ++var ) {
 		dtype = (var->sqltype & ~1);
 		switch( dtype ) {
 			case SQL_VARYING:
-				var->sqldata = (char*)ckalloc( sizeof(char)*(var->sqllen + 2) );
+				var->sqldata = (char*)ckalloc( sizeof(char)*(var->sqllen*2 + 2) );
 				break;
 			case SQL_TEXT:
-				var->sqldata = (char*)ckalloc( sizeof(char)*var->sqllen );
+				var->sqldata = (char*)ckalloc( sizeof(char)*var->sqllen*2 );
 				break;
 			case SQL_SHORT:
 				var->sqldata = (char*)ckalloc( sizeof(short)*1 );
@@ -817,6 +901,12 @@ static int coercetypes( XSQLDA* da ) {
 			case SQL_DATE:
 				var->sqldata = (char*)ckalloc( sizeof(ISC_QUAD)*1 );
 				break;
+			case SQL_TYPE_DATE:
+				var->sqldata = (char*)ckalloc( sizeof(ISC_DATE)*1 );
+				break;
+			case SQL_TYPE_TIME:
+				var->sqldata = (char*)ckalloc( sizeof(ISC_TIME)*1 );
+				break;
 			default:
 				return 1;
 		}
@@ -828,3 +918,4 @@ static int coercetypes( XSQLDA* da ) {
 
 	return 0;
 }
+
