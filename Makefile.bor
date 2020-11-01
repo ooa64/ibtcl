@@ -1,0 +1,31 @@
+#
+# Makefile for ibtcl
+# ( Borland compiler )
+#
+
+BCCROOT=c:\app\bor\bc5
+IBROOT=c:\sys\ibase
+TCLROOT=..\tcl7.6
+
+CC=$(BCCROOT)\bin\bcc32
+AR=$(BCCROOT)\bin\tlib
+
+CFLAGS = -I$(IBROOT)\include;$(TCLROOT)\generic -a4
+
+TARGETS = ibtclsh.exe ibtcl.lib
+
+OBJs = ibtcl.obj cmd.obj id.obj
+
+all: $(TARGETS)
+
+ibtclsh.exe: $(OBJs) ibtclsh.obj
+    $(CC) -L$(IBROOT)\lib;$(TCLROOT)\win -eibtclsh $(OBJs) ibtclsh.obj tcl76.lib gds32.lib
+
+ibtcl.lib: $(OBJs)
+	$(AR) ibtcl.lib +ibtcl.obj +cmd.obj +id.obj
+
+$(OBJs): ibtclInt.h Makefile
+
+clean:
+	@del $(TARGETS) *.obj
+

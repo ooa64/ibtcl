@@ -1,0 +1,192 @@
+
+                                   IBTCL
+                                      
+                         TCL interface to InterBase
+                             by Oleg Checkulaev
+                              ( Version 0.1 )
+                             Short description.
+                                      
+   Lyrics. IBTCL is a set of few functions added to Tcl language in hope
+   to work with InterBase databases from Tcl scripts. Actually, IBTCL is
+   a part of a TRICK project ( Tcl based HTML pages ). IBTCL does not
+   handle BLOB at all. So if you need to proccess BLOBs from IBTCL you
+   have either add new functions to IBTCL or to write UDF that converts
+   BLOB to one of well known basic types.
+   
+   Installation. Of course, to install and use IBTCL you need atleast
+   InterBase client library. First versions had been tested using
+   InterBase library for SCO. I had to use cross compiller to make
+   executables and keep ibcs2 module in my 2.0.31 kernel to execute them.
+   Today things are more simply. Now InterBase seems like yet another
+   Linux friendly database system. You can get InterBase for Linux from
+   www.interbase.com. To install IBTCL you need check Makefile ( correct
+   few lines if needed ) and type ``make'' in your favourite shell. This
+   will produce ibtclsh - interactive IBTCL shell and libibtcl.a -
+   library of IBTCL procedures.
+   
+                              IBTCL functions
+                                      
+   ib_open db user password
+          Opens connection to database as user with password. Returns
+          open database handle or error string. All handles of open
+          database connections are starting with ``ibc'' string followed
+          by number.
+          
+        # ...
+        if [catch {ib_open dbhost:/usr/interbase/db.gdb myname mysecret} dbh] {
+                puts $dbh
+                exit
+        }
+        # ...
+
+   ib_close db_handle
+          Closes database. Closes all statement handles associeted with
+          database handle. Commits transaction.
+          Returns nothing or error string.
+          
+        # ...
+        if [catch {ib_close $dbh} res] {
+                puts $res
+                exit
+        }
+        # ...
+
+   ib_exec db_handle statement
+          Executes statement. Returns statement handle on success or
+          error string. All of query statement handles are starting with
+          ``ibs'' string followed by number, all other types of
+          statements are handled by annonymous ``ok'' handle.
+          
+        # ...
+        if [catch {ib_exec $dbh $stmt} stmth] {
+                puts $stmth
+                exit
+        }
+        # ...
+
+   ib_isquery stmt_handle
+          Tests if handle handles query statement. Returns 1 if it's true
+          and 0 elsewhere.
+          
+        # ...
+        if [!ib_isquery $stmth] {
+                # non-query part
+        } else {
+                # query related part
+        }
+        # ...
+
+   ib_fetch [-name] [-n rows] stmt_handle varname
+          Fetches all or atmost ``rows'' tuples from statement handle
+          into the variable. Variable will be an array indexed by numbers
+          (tuple,field) or by field names and tuple number
+          (fieldname,tuple) if ``-name'' option is supplied, i.e.
+          varname(0,0) or varname(FIELD,0). Number of fetched tuples will
+          be returned in ``rows'' element of result array, number of
+          fields will be returned in ``cols'' element.
+          Returns nothing or error string.
+          NOTE: DATE value from database is returned in seconds. So if
+          You need string you have to use ``clock'' TCL function.
+          
+        #
+        # opening database and statement handles
+        #
+
+        if [catch {ib_fetch -n 10 $stmth res} err] {
+                puts "Fetch error: $err"
+                exit
+        }
+        puts "<center> Results </center>"
+        puts "<center><table width=100%>"
+        for {set i 0} {$i<$res(rows)} {incr i} {
+                puts "<tr>"
+                for {set j 0} {$j<$res(cols)} {incr j} {
+                        puts "<td> $res($i,$j) </td>"
+                }
+                puts "</tr>"
+        }
+        puts "</table></center>"
+        puts "<p align=right> $res(rows) fetched </p>"
+        
+        # ...
+
+   ib_fetch2proc [-name] [-n rows] stmt_handle varname proc
+          Same as ib_fetch function, but for each of fetched tuple it
+          will call ``proc'' procedure. Result variable defined in
+          current scope. Variable is array as in case of ib_fetch
+          function but indexed by filed number or field name, i.e.
+          varname(1) or varname(NAME). In result array ``rows'' element
+          is not defined.
+          Returns nothing or error string.
+          
+        set stmt "SELECT NAME, PHONE FROM ADDR WHERE SEX='female'"
+        set show {
+                puts "<tr>"
+                puts "<td> $res(NAME) </td>"
+                puts "<td> $res(PHONE) </td>"
+                puts "</tr>"
+        }
+
+        # opening database and statement handles
+
+        puts "<center> My girls </center>"
+        puts "<center><table width=100%>"
+        if [catch {ib_fetch2proc -name -n 10 $stmth res $show} err] {
+                puts "Fetch error: $err"
+                exit
+        }
+        puts "</table></center>"
+        # ...
+
+   ib_skip rows stmt_handle
+          Skips atmost ``rows'' tuples from statement handle.
+          Returns nothing or error string.
+          
+        # ...
+        # page variable is set to page number need to show
+        set lines 25 #lines per page
+        if [catch{ ib_skip [expr ($page-1)*$lines] $stmth} err] {
+                puts "skip error: $err"
+                exit
+        }
+        
+        if [catch {ib_fetch -n lines $stmth res} err] {
+                puts "fetch error: $err"
+                exit
+        }
+
+        if { $res(rows) > 0 } {
+                # output page
+        } else {
+                # no data
+        }
+
+        #...
+
+   ib_fields stmt_handle
+          Returns number of fields in response to query statement or
+          error string.
+          
+        puts "There are [ib_fields $stmth] field(s) in response"
+
+   ib_fieldname stmt_handle field
+          Returns field name in response to query statement.
+          
+        set fields [ib_fields $stmth]
+        for {set i 0} {i<$fields} {incr i} {
+                puts "[ib_fieldname $stmth $i]"
+        }
+
+   ib_free_stmt stmt_handle
+          Closes statement handle.
+          
+        ib_exec $dbh $stmt
+        .
+        .
+        .
+        ib_free_stmt $stmth
+
+     _________________________________________________________________
+                                      
+   Copyright (C) 1998 Oleg Checkulaev
+   e-mail: coa@ultramed.tatincom.ru
