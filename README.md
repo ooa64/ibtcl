@@ -2,11 +2,17 @@
 
 Interbase/Firebird extension for Tcl.
 
+Changed 01.11.2020, bugfix:
+
+        - Fixed SQLDIALECT usage in the ib_open.
+        - Support for FLOAT and INT64 db fields.
+        - Makefile updated to build shared lib.
+
 Changed 24.10.2015, version 0.1.1:
 
         - Optional database role and encoding for the ib_open call.
-	- Uses UTF-8 conversions.
-	- Defines SQLDIALECT in cmd.c (3 by default).
+        - Uses UTF-8 conversions.
+        - Defines SQLDIALECT in cmd.c (3 by default).
         - Defines TCLDATEFORMAT in cmd.c (string datetime instead of tcltime by default).
         - Can be compiled on Windows, MSVC makefile included.
 
