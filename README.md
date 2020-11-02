@@ -2,7 +2,7 @@
 
 Interbase/Firebird extension for Tcl.
 
-Changed 01.11.2020, bugfix:
+Changed 04.11.2015, bugfix:
 
         - Fixed SQLDIALECT usage in the ib_open.
         - Support for FLOAT and INT64 db fields.
