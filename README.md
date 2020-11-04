@@ -2,7 +2,7 @@
 
 Interbase/Firebird extension for Tcl.
 
-Recompiled and tested 04.11.2020 on Windows 10 and RHEL 7.4
+Recompiled and tested 04.11.2020 on Windows 10, Ubuntu 20.04, RHEL 7.4
                                            
 Changed 04.11.2015, bugfix:
 
