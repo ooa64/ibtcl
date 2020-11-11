@@ -54,7 +54,9 @@ typedef struct {
 
 
 /* ibtcl functions themselves */
+#ifdef DEBUG
 int do_ib_test( ClientData, Tcl_Interp*, int, char** );
+#endif
 int do_ib_open( ClientData, Tcl_Interp*, int, char** );
 int do_ib_close( ClientData, Tcl_Interp*, int, char** );
 int do_ib_exec( ClientData, Tcl_Interp*, int, char** );

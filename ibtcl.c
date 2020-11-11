@@ -68,8 +68,9 @@ EXTERN int Ibtcl_Init (Tcl_Interp *interp) {
 
 	Tcl_CallWhenDeleted( interp, ibtcl_shutdown, (ClientData)cd );
 	Tcl_CreateExitHandler( ibtcl_AtExit, (ClientData)cd );
-
+#ifdef DEBUG
 	Tcl_CreateCommand(interp, "ib_test", (Tcl_CmdProc *)do_ib_test, (ClientData)cd, (Tcl_CmdDeleteProc*)NULL);
+#endif
 
 	Tcl_CreateCommand(interp, "ib_open", (Tcl_CmdProc *)do_ib_open, (ClientData)cd, (Tcl_CmdDeleteProc*)NULL);
 	Tcl_CreateCommand(interp, "ib_close", (Tcl_CmdProc *)do_ib_close, (ClientData)cd, (Tcl_CmdDeleteProc*)NULL);
@@ -85,7 +86,7 @@ EXTERN int Ibtcl_Init (Tcl_Interp *interp) {
 
 	Tcl_CreateCommand(interp, "ib_isquery", (Tcl_CmdProc *)do_ib_isquery, (ClientData)cd, (Tcl_CmdDeleteProc*)NULL);
 
-	Tcl_PkgProvide( interp, "ibtcl", "0.1" );
+	Tcl_PkgProvide( interp, "ibtcl", "0.2" );
 	
 	return TCL_OK;
 }

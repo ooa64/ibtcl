@@ -1,13 +1,13 @@
 #
 # Makefile for ibtcl
 #
-IBROOT=.
-TCLROOT=/opt/tcl
+IBROOT=/opt/firebird
+TCLROOT=/usr
 TCLVER=8.6
 
-VERSION = ibtcl-011
+VERSION = ibtcl-020
 IBFLAGS = -I$(IBROOT)/include
-TCLFLAGS = -I$(TCLROOT)/include
+TCLFLAGS = -I$(TCLROOT)/include -I$(TCLROOT)/include/tcl
 #DEBUGFLAGS = -ggdb
 CFLAGS = $(IBFLAGS) $(TCLFLAGS) $(DEBUGFLAGS)
 
@@ -27,6 +27,23 @@ OBJs=ibtcl.o cmd.o id.o
 
 all: $(TARGETS)
 
+testprep:
+	pushd /tmp
+	PATH=$(IBROOT)/bin:$(PATH)
+	LD_LIBRARY_PATH=$(IBROOT)/lib:$(LD_LIBRARY_PATH)
+	gsec -user SYSDBA -password masterkey -add ibtcltest -pw test
+	gsec -user SYSDBA -password masterkey -add ibtcltestcyr -pw тест
+	gsec -user SYSDBA -password masterkey -add ibtcltтест -pw тест
+	isql -q -u SYSDBA -p masterkey -ch utf-8 -i test-create.sql
+	popd
+
+testrun:
+	PATH=$(TCLROOT)/bin:$(PATH) \
+	LD_LIBRARY_PATH=$(TCLROOT)/lib:$(IBROOT)/lib:$(LD_LIBRARY_PATH) \
+	Ibtcldll=./libibtcl.so \
+	FirebirdData=/tmp \
+	tclsh test.tcl
+
 ibtclsh: $(OBJs) ibtclsh.o
 	gcc $(CFLAGS) -o $@ $^ $(TCLLIB) $(IBLIB)
 
@@ -35,7 +52,7 @@ libibtcl.a: $(OBJs)
 	ar cr $@ $^
 
 libibtcl.so: $(OBJs)
-        gcc -shared -o $@ $^ $(TCLLIB) $(IBLIB)
+	gcc -shared -o $@ $^ $(TCLLIB) $(IBLIB)
 
 $(OBJs): ibtclInt.h Makefile
 

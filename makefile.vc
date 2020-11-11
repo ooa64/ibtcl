@@ -29,8 +29,8 @@
 #
 
 LIBRARY = ibtcl
-DOTVERSION = 0.1.1
-VERSION = 011
+DOTVERSION = 0.2.0
+VERSION = 020
 
 LIBRARY_OBJs = cmd.obj ibtcl.obj id.obj
 SHELL_OBJs = ibtclsh.obj
@@ -161,8 +161,8 @@ LIBS=$(LIBS) $(IBROOT)\lib\fbclient_ms.lib
 
 !endif
 
-#CFLAGS	= $(CFLAGS) -W3 -WX $(DBG_CFLAGS)
-CFLAGS	= $(CFLAGS) -W3 $(DBG_CFLAGS)
+#CFLAGS	= $(CFLAGS) -W3 -WX $(DBG_CFLAGS) $(SDK_CFLAGS)
+CFLAGS	= $(CFLAGS) -W3 $(DBG_CFLAGS) $(SDK_CFLAGS)
 LFLAGS  = -machine:IX86 -subsystem:console -stack:2300000 $(LFLAGS) $(DBG_LFLAGS)
 
 TCLLIB = tcl$(TCLVER)$(DBGX).lib
