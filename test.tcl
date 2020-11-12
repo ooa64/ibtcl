@@ -1,3 +1,6 @@
+#!/usr/bin/env tclsh -encoding utf-8 test.tcl
+encoding system utf-8
+
 package require tcltest
 namespace import tcltest::*
 
@@ -11,17 +14,38 @@ set fbserverConn [file join $env(FirebirdData) ibtcltest.fdb]
 set fbserverConnCyr [file join $env(FirebirdData) ibtclтест.fdb]
 set isqlName [auto_execok isql]
 
+testConstraint isql [expr {$isqlName ne ""}]
+testConstraint memory [expr {[testConstraint memory] && [info commands memory] eq "memory"}]
+
 if {$tcl_platform(platform) eq "windows"} {
     set ibtclEnc cp1251
 } else {
     set ibtclEnc utf-8
 }
 
-testConstraint isql [expr {$isqlName ne ""}]
+proc a2r {avar} {
+    upvar $avar a
+    set t {}
+    for {set r 0} {$r < $a(rows)} {incr r} {
+        set l {}
+        for {set c 0} {$c < $a(cols)} {incr c} {
+            lappend l $a($r,$c)
+        }
+	lappend t $l
+    }
+    return $t
+}
 
-test 0.1 "load library" {
+test 0.1 "memory debug" memory {
+    memory init on
+    memory validate on
+#   memory trace on
+} {}
+
+test 0.2 "load library" {
     load $ibtclLib
     testConstraint ibtcl01 [expr {[package require ibtcl] eq "0.1"}]
+    testConstraint ibdebug [expr {[info commands ib_test] eq "ib_test"}]
     testConstraint ibtcl 1
 } {1}
 
@@ -66,7 +90,7 @@ test 1.6 "select nonascii table" -constraints {fbconnected BUG} -setup {
     set d [ib_open $fbserverConnCyr ibtcltest test]
     set s [ib_exec $d "select * from \"тест\""]
 } -body {
-    list [ib_fetch -n 3 $s a] [array get a]
+    list [ib_fetch -n 3 $s a] [a2r a]
 } -cleanup {
     catch {ib_close $d}
     catch {ib_free_stmt $s}
@@ -94,22 +118,49 @@ test 2.2 "simple query timestamp" -constraints fbconnected -setup {
 test 2.3 "simple query text" -constraints fbconnected -setup {
     set s [ib_exec $ibtclDbh "select * from test"]
 } -body {
-    list [ib_fetch -n 3 $s a] [array get a]
+    list [ib_fetch -n 3 $s a] [a2r a]
 } -cleanup {
     catch {ib_free_stmt $s}
     unset -nocomplain s
-} -match glob -result {{} {0,0 1 cols 2 1,0 2 0,1 one 2,0 3 1,1 two rows 3 2,1 three}}
+} -result {{} {{1 one} {2 two} {3 three}}}
 
 test 2.4 "simple query nonacii text" -constraints fbconnected -setup {
     set s [ib_exec $ibtclDbh "select * from testcyr"]
 } -body {
-    list [ib_fetch -n 3 $s a] [array get a]
+    list [ib_fetch -n 3 $s a] [a2r a]
 } -cleanup {
     catch {ib_free_stmt $s}
     unset -nocomplain s
-} -match glob -result {{} {0,0 1 cols 2 1,0 2 0,1 один 2,0 3 1,1 два rows 3 2,1 три}}
+} -result {{} {{1 один} {2 два} {3 три}}}
 
-test 9.99 "disconnect" fbcreated {
+test 2.5 "simple query all types" -constraints fbconnected -setup {
+    set s [ib_exec $ibtclDbh "select * from testtypes"]
+} -body {
+    list [ib_fetch -n 1 $s a] [a2r a]
+} -cleanup {
+    catch {ib_free_stmt $s}
+    unset -nocomplain s
+} -result {{} {{1 2 3 4 5 6.66 7 8 9.99 10.100000 20.200000 2001-01-31 12:34:56 {2016-12-25 12:34:56} c {c1        } h {h1        } v}}}
+
+test 2.6 "simple query all types min values" -constraints fbconnected -setup {
+    set s [ib_exec $ibtclDbh "select * from testtypes order by i"]
+} -body {
+    list [ib_fetch -n 1 $s a] [a2r a]
+} -cleanup {
+    catch {ib_free_stmt $s}
+    unset -nocomplain s
+} -result {{} {{-2147483648 -32768 -9223372036854775808 -32768 -32768 -327.68 -99999999 -999999999 -9999999.99 -9999.990234 -9999999999999.990200 0001-01-01 00:00:00 {2001-01-01 00:00:00} { } {          } { } {          } {}}}}
+
+test 2.7 "simple query all types max values" -constraints fbconnected -setup {
+    set s [ib_exec $ibtclDbh "select * from testtypes order by i desc"]
+} -body {
+    list [ib_fetch -n 1 $s a] [a2r a]
+} -cleanup {
+    catch {ib_free_stmt $s}
+    unset -nocomplain s
+} -result {{} {{2147483647 32767 9223372036854775807 32767 32767 327.67 99999999 999999999 9999999.99 9999.990234 9999999999999.990200 0001-01-01 00:00:00 {2001-01-01 00:00:00} X XXXXXXXXXX x xxxxxxxxxx ЙЙЙЙЙЙЙЙЙЙ}}}
+
+test 9.99 "disconnect" fbconnected {
     ib_close $ibtclDbh
 } {}
 

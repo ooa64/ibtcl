@@ -41,6 +41,9 @@ static void ib_getval( XSQLVAR *var, char *buf );
 #define TCLDATEFORMAT 0
 #define MAX_DPB_SIZE 1024
 
+#define ENC_LENGTH( _con_ ) ( Tcl_DStringLength( &( ( _con_ )->enc_buf ) ) )
+#define ENC_VALUE( _con_ ) ( Tcl_DStringValue( &( ( _con_ )->enc_buf ) ) )
+
 #ifndef ISC_INT64_FORMAT
 #if (defined(_MSC_VER) && defined(WIN32))
 #define	ISC_INT64_FORMAT	"I64"
@@ -51,7 +54,7 @@ static void ib_getval( XSQLVAR *var, char *buf );
 
 
 static char * ib_text2tcl( IB_Connection * con, char * s ) {
-	if( con->enc ) {
+	if( con ) {
 		Tcl_DStringFree( &(con->enc_buf) );
 		Tcl_ExternalToUtfDString( con->enc, s, -1, &(con->enc_buf) );
 		return Tcl_DStringValue( &(con->enc_buf) );
@@ -62,7 +65,7 @@ static char * ib_text2tcl( IB_Connection * con, char * s ) {
 
 
 static char * ib_tcl2text( IB_Connection * con, char * s ) {
-	if( con->enc ) {
+	if( con ) {
 		Tcl_DStringFree( &(con->enc_buf) );
 		Tcl_UtfToExternalDString( con->enc, s, -1, &(con->enc_buf) );
 		return Tcl_DStringValue( &(con->enc_buf) );
@@ -99,16 +102,14 @@ static void ib_free_encoding( IB_Connection * con ) {
 }
 
 
-static void ib_append_dpb( char * dpb, short * dpblen, char t, char * s ) {
+static void ib_append_dpb( IB_Connection *con, char * dpb, short * dpblen, char t, char * s ) {
 	Tcl_DString ds;
 	int l = strlen( s );
-	int is_text = 1;
-
-	if( is_text ) {
-		Tcl_DStringInit( &ds );
-		Tcl_UtfToExternalDString( NULL, s, -1, &ds );
-		l = Tcl_DStringLength( &ds );
-		s = Tcl_DStringValue( &ds );
+	int is_text = 1; /* username, password, etc */
+	if( is_text && con ) {
+		ib_tcl2text( con, s );
+		l = ENC_LENGTH( con );
+		s = ENC_VALUE( con );
 	}
 	if( s && l < 256 && ( ( * dpblen ) + 2 + l ) < MAX_DPB_SIZE ) {
 		dpb[ (* dpblen )++ ] = t;
@@ -116,9 +117,6 @@ static void ib_append_dpb( char * dpb, short * dpblen, char t, char * s ) {
 		for( char i = 0 ; i < l ; ) {
 			dpb[ ( * dpblen )++ ] = s[ i++ ];
 		}
-	}
-	if( is_text ) {
-		Tcl_DStringFree( &ds );
 	}
 }
 
@@ -243,6 +241,16 @@ int do_ib_open( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	enc = argc > 5 ? argv[5] : NULL; 
 	set = argc > 6 ? argv[6] : NULL; 
 
+	if( enc ) {
+		if( ib_init_encoding( ip, con, enc ) != TCL_OK ) {
+			isc_commit_transaction( stat, &con->trh );
+			ckfree( (char *)con );
+			return TCL_ERROR;
+		}
+	} else {
+		ib_init_encoding( ip, con, NULL );
+	}
+
 	/* From InterBase API
 	l = 4;
 	con->dpb = t  = (char*)ckalloc( l*sizeof(char) );
@@ -265,38 +273,30 @@ int do_ib_open( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	dpb[l++] = ( char )1;
 	dpb[l++] = ( char )1;
    
-	ib_append_dpb( dpb, &l, isc_dpb_user_name, usr );
-	ib_append_dpb( dpb, &l, isc_dpb_password, pass );
+	ib_append_dpb( con, dpb, &l, isc_dpb_user_name, usr );
+	ib_append_dpb( con, dpb, &l, isc_dpb_password, pass );
 	if ( role ) {
-		ib_append_dpb( dpb, &l, isc_dpb_sql_role_name, role );
+		ib_append_dpb( con, dpb, &l, isc_dpb_sql_role_name, role );
 	}
 	if( set ) {
-		ib_append_dpb( dpb, &l, isc_dpb_lc_ctype, set );
-		ib_append_dpb( dpb, &l, isc_dpb_lc_messages, set );
+		ib_append_dpb( NULL, dpb, &l, isc_dpb_lc_ctype, set );
+		ib_append_dpb( NULL, dpb, &l, isc_dpb_lc_messages, set );
 	}
 
 	dbh = 0L;
 	isc_attach_database( stat, strlen(db), db, &dbh, l, dpb );
 	ckfree( (char *)dpb );
 	if( stat[0]==1 && stat[1] ) {
+		ib_free_encoding( con );
 		ckfree( (char *)con );
 		return ib_err( ip, &statp );
 	}
 
 	trh = 0L;
 	if( isc_start_transaction( stat, &trh, 1, &dbh, 0, NULL ) ) {
+		ib_free_encoding( con );
 		ckfree( (char *)con );
 		return ib_err( ip, &statp );
-	}
-
-	if( enc ) {
-		if( ib_init_encoding( ip, con, enc ) != TCL_OK ) {
-			isc_commit_transaction( stat, &con->trh );
-			ckfree( (char *)con );
-			return TCL_ERROR;
-		}
-	} else {
-		ib_init_encoding( ip, con, NULL );
 	}
 
 	con->dbh = dbh;
@@ -838,18 +838,6 @@ ib_test []
 	- test routing
 */
 int do_ib_test( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
-	char *f, *d;
-	char buf[1024];
-
-	if( argc!=3 ) {
-		Tcl_AppendResult( ip, "usage: ib_test format digit", NULL );
-		return TCL_ERROR;
-	}
-
-	p = (char *)Tcl_GetVar( ip, argv[1], TCL_LEAVE_ERR_MSG );
-
-	sprintf( buf, f, d )
-
 /*
 	int c, i;
 	char *p, **a;
@@ -878,6 +866,7 @@ int do_ib_test( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	return TCL_OK;
 }
 #endif
+
 
 /*
 	Static staff begins here
