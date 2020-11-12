@@ -10,18 +10,13 @@ puts test:тест
 
 set ibtclDbh ""
 set ibtclLib $env(Ibtcldll)
+set ibtclEnc cp1251
 set fbserverConn [file join $env(FirebirdData) ibtcltest.fdb]
 set fbserverConnCyr [file join $env(FirebirdData) ibtclтест.fdb]
 set isqlName [auto_execok isql]
 
 testConstraint isql [expr {$isqlName ne ""}]
 testConstraint memory [expr {[testConstraint memory] && [info commands memory] eq "memory"}]
-
-if {$tcl_platform(platform) eq "windows"} {
-    set ibtclEnc cp1251
-} else {
-    set ibtclEnc utf-8
-}
 
 proc a2r {avar} {
     upvar $avar a
@@ -67,7 +62,8 @@ test 1.3.1 "connect user with nonascii password (hack)" {fbconnected ibtcl01} {
 } {}
 
 test 1.3.2 "connect user with nonascii password" {fbconnected} {
-    ib_close [ib_open $fbserverConn ibtcltestcyr тест {} $ibtclEnc]
+#   ib_close [ib_open $fbserverConn ibtcltestcyr тест {} $ibtclEnc]
+    ib_close [ib_open $fbserverConn ibtcltestcyr тест]
 } {}
 
 test 1.4 "connect nonascii user with nonascii password" {fbconnected BUG} {
@@ -149,7 +145,7 @@ test 2.6 "simple query all types min values" -constraints fbconnected -setup {
 } -cleanup {
     catch {ib_free_stmt $s}
     unset -nocomplain s
-} -result {{} {{-2147483648 -32768 -9223372036854775808 -32768 -32768 -327.68 -99999999 -999999999 -9999999.99 -9999.990234 -9999999999999.990200 0001-01-01 00:00:00 {2001-01-01 00:00:00} { } {          } { } {          } {}}}}
+} -match glob -result {{} {{-2147483648 -32768 -9223372036854775808 -32768 -32768 -327.68 -99999999 -999999999 -9999999.99 -9999.99* -9999999999999.99* 0001-01-01 00:00:00 {2001-01-01 00:00:00} { } {          } { } {          } {}}}}
 
 test 2.7 "simple query all types max values" -constraints fbconnected -setup {
     set s [ib_exec $ibtclDbh "select * from testtypes order by i desc"]
@@ -158,7 +154,7 @@ test 2.7 "simple query all types max values" -constraints fbconnected -setup {
 } -cleanup {
     catch {ib_free_stmt $s}
     unset -nocomplain s
-} -result {{} {{2147483647 32767 9223372036854775807 32767 32767 327.67 99999999 999999999 9999999.99 9999.990234 9999999999999.990200 0001-01-01 00:00:00 {2001-01-01 00:00:00} X XXXXXXXXXX x xxxxxxxxxx ЙЙЙЙЙЙЙЙЙЙ}}}
+} -match glob -result {{} {{2147483647 32767 9223372036854775807 32767 32767 327.67 99999999 999999999 9999999.99 9999.99* 9999999999999.99* 0001-01-01 00:00:00 {2001-01-01 00:00:00} X XXXXXXXXXX x xxxxxxxxxx ЙЙЙЙЙЙЙЙЙЙ}}}
 
 test 9.99 "disconnect" fbconnected {
     ib_close $ibtclDbh
