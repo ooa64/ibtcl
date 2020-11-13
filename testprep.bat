@@ -1,17 +1,18 @@
 @echo off
 
-set Script=%CD%\testprep.sql
-set Firebird=D:\Firebird
-set FirebirdData=D:\FirebirdData
-set path=%Firebird%\bin;%path%
+set SCRIPT=%CD%\testprep.sql 
+set TCLROOT=C:\P\tcl-32-8.6-m
+set IBROOT=D:\Firebird
+set IBDATA=D:\FirebirdData
+set PATH=%TCLROOT%\bin;%IBROOT%\bin;%PATH%
 
-pushd %FirebirdData%
+pushd %IBDATA%
 
 :taskkill /im fbserver.exe
 
 chcp 1251
-del %FirebirdData%\ibtcltest.fdb
-del %FirebirdData%\ibtclòåñò.fdb
+del ibtcltest.fdb
+del ibtclòåñò.fdb
 chcp 866
 
 :start "fbserver" %Firebird%\bin\fbserver.exe -a

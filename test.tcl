@@ -9,10 +9,10 @@ puts stdout:[fconfigure stdout -encoding]
 puts test:тест
 
 set ibtclDbh ""
-set ibtclLib $env(Ibtcldll)
+set ibtclLib $env(TARGETDLL)
 set ibtclEnc cp1251
-set fbserverConn [file join $env(FirebirdData) ibtcltest.fdb]
-set fbserverConnCyr [file join $env(FirebirdData) ibtclтест.fdb]
+set fbserverConn [file join $env(IBDATA) ibtcltest.fdb]
+set fbserverConnCyr [file join $env(IBDATA) ibtclтест.fdb]
 set isqlName [auto_execok isql]
 
 testConstraint isql [expr {$isqlName ne ""}]
@@ -62,8 +62,7 @@ test 1.3.1 "connect user with nonascii password (hack)" {fbconnected ibtcl01} {
 } {}
 
 test 1.3.2 "connect user with nonascii password" {fbconnected} {
-#   ib_close [ib_open $fbserverConn ibtcltestcyr тест {} $ibtclEnc]
-    ib_close [ib_open $fbserverConn ibtcltestcyr тест]
+    ib_close [ib_open $fbserverConn ibtcltestcyr тест {} $ibtclEnc]
 } {}
 
 test 1.4 "connect nonascii user with nonascii password" {fbconnected BUG} {

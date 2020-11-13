@@ -33,15 +33,14 @@ DOTVERSION = 0.2.0
 VERSION = 020
 
 LIBRARY_OBJs = cmd.obj ibtcl.obj id.obj
-SHELL_OBJs = ibtclsh.obj
 SHELL_OBJs = ibtclAppInit.obj tclAppInit.obj 
 
 !ifndef TCLROOT
-TCLROOT = c:\tcl84
+TCLROOT = c:\activetcl
 !endif
 
 !ifndef TCLVER
-TCLVER = 84
+TCLVER = 86
 !endif
 
 !ifndef CUSTOM_FB
@@ -68,10 +67,6 @@ UNICODE=0
 THREADS=0
 !endif
 
-!ifndef DIALOGS
-DIALOGS = 0
-!endif
-
 !ifndef DEBUG
 DEBUG = 0
 !endif
@@ -81,11 +76,7 @@ MSVCRT = 0
 !endif
 
 DBGX=
-DEFINES = -D__WIN32__ -DWIN32 -D_WINDOWS -DWINVER=0x0400 -D_CRT_SECURE_NO_WARNINGS
-
-!if $(UNICODE) != 0
-DEFINES = $(DEFINES) -DUNICODE -D_UNICODE
-!endif
+DEFINES = -D_CRT_SECURE_NO_WARNINGS
 
 !if $(THREADS) != 0
 DBGX = t
@@ -161,9 +152,29 @@ LIBS=$(LIBS) $(IBROOT)\lib\fbclient_ms.lib
 
 !endif
 
+!if "$(MACHINE)" == ""
+!if "$(PLATFORM)" == "x64"
+MACHINE     = IA64
+!else
+MACHINE     = IX86
+!endif
+!endif
+
+!if "$(MACHINE)" == "IA64"
+PLATFORM  = x64
+clXX      = "$(VCINSTALLDIR)\bin\x86_amd64\cl.exe"
+linkXX    = "$(VCINSTALLDIR)\bin\x86_amd64\link.exe"
+libXX     = "$(VCINSTALLDIR)\bin\x86_amd64\lib.exe"
+!else
+PLATFORM  = x86
+clXX      = "$(VCINSTALLDIR)\bin\cl.exe"
+linkXX    = "$(VCINSTALLDIR)\bin\link.exe"
+libXX     = "$(VCINSTALLDIR)\bin\lib.exe"
+!endif
+
 #CFLAGS	= $(CFLAGS) -W3 -WX $(DBG_CFLAGS) $(SDK_CFLAGS)
 CFLAGS	= $(CFLAGS) -W3 $(DBG_CFLAGS) $(SDK_CFLAGS)
-LFLAGS  = -machine:IX86 -subsystem:console -stack:2300000 $(LFLAGS) $(DBG_LFLAGS)
+LFLAGS  = -subsystem:console -stack:2300000 $(LFLAGS) $(DBG_LFLAGS)
 
 TCLLIB = tcl$(TCLVER)$(DBGX).lib
 
@@ -177,15 +188,6 @@ LIBS = $(LIBS) $(TCLSTUBLIB)
 LIBS = $(LIBS) $(TCLLIB)
 !endif
 
-!if $(DIALOGS) != 0
-LIBS = $(LIBS) comdlg32.lib 
-DEFINES = $(DEFINES) -DDIALOGS
-!endif
-
-!if $(TCLVER) >= 86
-LIBS = $(LIBS) Netapi32.lib
-!endif
-
 LIBS = $(LIBS) advapi32.lib user32.lib gdi32.lib winspool.lib
 
 TARGET = $(LIBRARY)$(VERSION)$(DBGX).$(EXT)
@@ -193,15 +195,50 @@ TARGETLIB = $(LIBRARY)$(VERSION)$(DBGX).lib
 TARGETDLL = $(LIBRARY)$(VERSION)$(DBGX).dll
 SHELL = $(LIBRARY)sh$(VERSION)$(DBGX).exe
 
-#TCLSH = $(TCLROOT)\bin\tclsh$(TCLVER)$(DBGX).exe
-TCLSH == $(SHELL)
+TCLSH = $(TCLROOT)\bin\tclsh$(TCLVER)$(DBGX).exe
 
 all: $(TARGET)
 
 shell: $(SHELL)
 
-test: all
-	 $(TCLSH) test.tcl
+test: testrun
+
+testprep:
+	setlocal
+	set PATH=$(TCLROOT)\bin;$(IBROOT)\bin;%%PATH%%
+	cd $(IBDATA)
+	chcp 1251
+	del ibtcltest.fdb
+	del ibtclòåñò.fdb
+	chcp 866
+	echo user ibtcltest/test
+	gsec -user SYSDBA -password masterkey -delete ibtcltest
+	gsec -user SYSDBA -password masterkey -add ibtcltest -pw test
+	echo user ibtcltestcyr/â¥áâ
+	gsec -user SYSDBA -password masterkey -delete ibtcltestcyr
+	gsec -user SYSDBA -password masterkey -add ibtcltestcyr -pw â¥áâ
+	rem echo user ibtclâ¥áâ
+	rem gsec -user SYSDBA -password masterkey -delete ibtclâ¥áâ
+	rem gsec -user SYSDBA -password masterkey -add ibtcltâ¥áâ -pw test
+	isql -q -u SYSDBA -p masterkey -ch utf-8 -i $(MAKEDIR)\testprep.sql
+	chcp 1251
+	echo script ibtclòåñò.fdb
+	echo create database "ibtclòåñò.fdb"; exit; | isql -q -u SYSDBA -p masterkey -ch WIN1251
+	chcp 866
+	cd $(MAKERIR)
+	endlocal
+
+testrun: $(TARGETDLL)
+	@setlocal
+	@set TARGETDLL=$(TARGETDLL)
+	@set TCLROOT=$(TCLROOT)
+	@set IBROOT=$(IBROOT)
+	@set IBDATA=$(IBDATA)
+	@set Path=$(TCLROOT)\bin;$(IBROOT)\bin;%%Path%%
+	@chcp 65001
+	@$(TCLSH) -encoding utf-8 test.tcl
+	@rem $(SHELL) -encoding utf-8 test.tcl
+	@endlocal
 
 clean:
 	@-del *.obj
@@ -223,19 +260,19 @@ install: all
         echo y | xcopy /i pkgIndex.tcl $(TCLROOT)\lib\$(LIBRARY)$(DOTVERSION)
 
 $(TARGETLIB): $(LIBRARY_OBJs)
-	lib -nologo -ltcg -out:$@ $(LIBRARY_OBJs)
+	$(libXX) -nologo -ltcg -out:$@ $(LIBRARY_OBJs)
 
 $(TARGETDLL): $(LIBRARY_OBJs)
-	link -nologo -dll -out:$@ $(LFLAGS) $(TCLSTUBLIB) $(LIBS) $(LIBRARY_OBJs)
+	$(linkXX) -nologo -dll -out:$@ $(LFLAGS) $(TCLSTUBLIB) $(LIBS) $(LIBRARY_OBJs)
 
 $(SHELL): $(LIBRARY_OBJs) $(SHELL_OBJs) tclsh.res
-	link -nologo $(LFLAGS) -out:$@ $(LIBS) $(TCLLIB) $(SHELL_OBJs) $(LIBRARY_OBJs) tclsh.res 
+	$(linkXX) -nologo $(LFLAGS) -out:$@ $(LIBS) $(TCLLIB) $(SHELL_OBJs) $(LIBRARY_OBJs) tclsh.res 
 
 tclAppInit.obj: tclAppInit.c 
-	cl -nologo -c -EHsc $(INCLUDES) $(DEFINES) $(CFLAGS) /DTCL_LOCAL_APPINIT=Ibtcl_AppInit -Fo$@ $?
+	$(clXX) -nologo -c -EHsc $(INCLUDES) $(DEFINES) $(CFLAGS) /DTCL_LOCAL_APPINIT=Ibtcl_AppInit -Fo$@ $?
 
 ibtclAppInit.obj: ibtclAppInit.c 
-	cl -nologo -c -EHsc $(INCLUDES) $(DEFINES) $(USESTUBS) $(CFLAGS) -Fo$@ $?
+	$(clXX) -nologo -c -EHsc $(INCLUDES) $(DEFINES) $(USESTUBS) $(CFLAGS) -Fo$@ $?
 
 .rc.res:
         rc -fo $@ -r -i $(TCLROOT)\include -D__WIN32__ \
@@ -246,17 +283,17 @@ ibtclAppInit.obj: ibtclAppInit.c
         $<
 
 .cpp.obj ::
-	cl -nologo -c -EHsc $(INCLUDES) $(DEFINES) $(CFLAGS) @<<
+	$(clXX) -nologo -c -EHsc $(INCLUDES) $(DEFINES) $(CFLAGS) @<<
 $<
 <<
 
 .cc.obj ::
-	cl -nologo -c -EHsc $(INCLUDES) $(DEFINES) $(CFLAGS) @<<
+	$(clXX) -nologo -c -EHsc $(INCLUDES) $(DEFINES) $(CFLAGS) @<<
 $<
 <<
 
 .c.obj ::
-	cl -nologo -c $(INCLUDES) $(DEFINES) $(CFLAGS) @<<
+	$(clXX) -nologo -c $(INCLUDES) $(DEFINES) $(CFLAGS) @<<
 $<
 <<
 
