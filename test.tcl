@@ -45,7 +45,7 @@ test 0.2 "load library" {
 } {1}
 
 test 1.0 "connect as sysdba" {
-    set ibtclDbh [ib_open $fbserverConn SYSDBA masterkey {} $ibtclEnc]
+    set ibtclDbh [ib_open $fbserverConn SYSDBA masterkey {} $ibtclEnc WIN1251]
     testConstraint fbconnected 1
 } {1}
 
@@ -92,6 +92,13 @@ test 1.6 "select nonascii table" -constraints {fbconnected BUG} -setup {
     catch {ib_free_stmt $s}
     unset -nocomplain s
 } -match glob -result {{} {0,0 1 cols 2 1,0 2 0,1 один 2,0 3 1,1 два rows 3 2,1 три}}
+
+test 2.0 "simple query error" -constraints fbconnected -body {
+    set s [ib_exec $ibtclDbh "xxx"]
+} -cleanup {
+    catch {ib_free_stmt $s}
+    unset -nocomplain s
+} -match glob -result {Dynamic SQL Error*Token unknown*} -returnCodes 1
 
 test 2.1 "simple query" -constraints fbconnected -setup {
     set s [ib_exec $ibtclDbh "select 'X' X from rdb\$database"]

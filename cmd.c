@@ -39,6 +39,7 @@ static void ib_getval( XSQLVAR *var, char *buf );
 
 #define SQLDIALECT 3
 #define TCLDATEFORMAT 0
+#define ERR_BUFFSIZE 512	
 #define MAX_DPB_SIZE 1024
 
 #define ENC_LENGTH( _con_ ) ( Tcl_DStringLength( &( ( _con_ )->enc_buf ) ) )
@@ -103,7 +104,6 @@ static void ib_free_encoding( IB_Connection * con ) {
 
 
 static void ib_append_dpb( IB_Connection *con, char * dpb, short * dpblen, char t, char * s ) {
-	Tcl_DString ds;
 	int l = strlen( s );
 	int is_text = 1; /* username, password, etc */
 	if( is_text && con ) {
@@ -147,14 +147,14 @@ static char * ib_int64str( char* buf, ISC_INT64* d, short dscale ) {
 
 
 static int ib_err( Tcl_Interp* ip, long **p ) {
-	char err[512];
+	char err[ERR_BUFFSIZE];
 	Tcl_DString ds;
 
 	Tcl_DStringInit( &ds );
-	isc_interprete( err, p );
+	fb_interpret( err, ERR_BUFFSIZE, p );
 	Tcl_DStringAppend( &ds, err, -1 );
 
-	while( isc_interprete(err,p) ) {
+	while( fb_interpret( err, ERR_BUFFSIZE, p ) ) {
 		Tcl_DStringAppend( &ds, "\n- ", -1 );
 		Tcl_DStringAppend( &ds, err, -1 );
 	}
