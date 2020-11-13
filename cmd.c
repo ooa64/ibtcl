@@ -113,8 +113,9 @@ static void ib_append_dpb( IB_Connection *con, char * dpb, short * dpblen, char 
 	}
 	if( s && l < 256 && ( ( * dpblen ) + 2 + l ) < MAX_DPB_SIZE ) {
 		dpb[ (* dpblen )++ ] = t;
-		dpb[ (* dpblen )++ ] = l ;
-		for( char i = 0 ; i < l ; ) {
+		dpb[ (* dpblen )++ ] = l;
+		char i = 0;
+		while ( i < l ) {
 			dpb[ ( * dpblen )++ ] = s[ i++ ];
 		}
 	}
