@@ -103,7 +103,6 @@ static void ib_free_encoding( IB_Connection * con ) {
 
 
 static void ib_append_dpb( IB_Connection *con, char * dpb, short * dpblen, char t, char * s ) {
-	Tcl_DString ds;
 	int l = strlen( s );
 	int is_text = 1; /* username, password, etc */
 	if( is_text && con ) {
