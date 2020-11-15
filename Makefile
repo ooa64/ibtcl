@@ -1,15 +1,15 @@
 #
 # Makefile for ibtcl
 #
-IBROOT=/opt/firebird
-TCLROOT=/usr
-TCLVER=8.6
+IBROOT?=/opt/firebird
+TCLROOT?=/usr
+TCLVER?=8.6
 
 VERSION = ibtcl-020
 IBFLAGS = -I$(IBROOT)/include
 TCLFLAGS = -I$(TCLROOT)/include -I$(TCLROOT)/include/tcl
 #DEBUGFLAGS = -ggdb
-CFLAGS = $(IBFLAGS) $(TCLFLAGS) $(DEBUGFLAGS)
+CFLAGS = -fPIC $(IBFLAGS) $(TCLFLAGS) $(DEBUGFLAGS)
 
 TCLLIB = -L$(TCLROOT)/lib -ltcl$(TCLVER) -lm -ldl
 IBLIB = -L$(IBROOT)/lib -lfbclient

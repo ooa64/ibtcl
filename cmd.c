@@ -39,6 +39,7 @@ static void ib_getval( XSQLVAR *var, char *buf );
 
 #define SQLDIALECT 3
 #define TCLDATEFORMAT 0
+#define ERR_BUFFSIZE 512	
 #define MAX_DPB_SIZE 1024
 
 #define ENC_LENGTH( _con_ ) ( Tcl_DStringLength( &( ( _con_ )->enc_buf ) ) )
@@ -103,7 +104,7 @@ static void ib_free_encoding( IB_Connection * con ) {
 
 
 static void ib_append_dpb( IB_Connection *con, char * dpb, short * dpblen, char t, char * s ) {
-	int l = strlen( s );
+	int l = (int)strlen( s );
 	int is_text = 1; /* username, password, etc */
 	if( is_text && con ) {
 		ib_tcl2text( con, s );
@@ -112,8 +113,9 @@ static void ib_append_dpb( IB_Connection *con, char * dpb, short * dpblen, char 
 	}
 	if( s && l < 256 && ( ( * dpblen ) + 2 + l ) < MAX_DPB_SIZE ) {
 		dpb[ (* dpblen )++ ] = t;
-		dpb[ (* dpblen )++ ] = l ;
-		for( char i = 0 ; i < l ; ) {
+		dpb[ (* dpblen )++ ] = l;
+		char i = 0;
+		while ( i < l ) {
 			dpb[ ( * dpblen )++ ] = s[ i++ ];
 		}
 	}
@@ -145,15 +147,15 @@ static char * ib_int64str( char* buf, ISC_INT64* d, short dscale ) {
 }
 
 
-static int ib_err( Tcl_Interp* ip, long **p ) {
-	char err[512];
+static int ib_err( Tcl_Interp* ip, ISC_STATUS **p ) {
+	char err[ERR_BUFFSIZE];
 	Tcl_DString ds;
 
 	Tcl_DStringInit( &ds );
-	isc_interprete( err, p );
+	fb_interpret( err, ERR_BUFFSIZE, p );
 	Tcl_DStringAppend( &ds, err, -1 );
 
-	while( isc_interprete(err,p) ) {
+	while( fb_interpret( err, ERR_BUFFSIZE, p ) ) {
 		Tcl_DStringAppend( &ds, "\n- ", -1 );
 		Tcl_DStringAppend( &ds, err, -1 );
 	}
@@ -166,7 +168,7 @@ static int ib_err( Tcl_Interp* ip, long **p ) {
 
 
 int ib_close_conn( Tcl_Interp *ip, IB_Connection *con ) {
-	long stat[20], *statp = stat;
+	ISC_STATUS stat[20], *statp = stat;
 
 	if( con->trh ) {
 		if( isc_commit_transaction( stat, &con->trh ) ) {
@@ -188,7 +190,7 @@ int ib_close_conn( Tcl_Interp *ip, IB_Connection *con ) {
 
 
 void ib_close_stmt( IB_Statement *s ) {
-	long stat[20], *statp = stat;
+	ISC_STATUS stat[20], *statp = stat;
 	int i;
 
 	if( s->xd != NULL ) {
@@ -222,7 +224,7 @@ int do_ib_open( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	IB_ClientData* cd = (IB_ClientData*) cData;
 	IB_Connection *con;
 	char *db, *usr, *pass, *role, *enc, *set, *dpb;
-	long stat[20], *statp = stat;
+	ISC_STATUS stat[20], *statp = stat;
 	isc_db_handle dbh;
 	isc_tr_handle trh;
 	short l;
@@ -283,7 +285,7 @@ int do_ib_open( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	}
 
 	dbh = 0L;
-	isc_attach_database( stat, strlen(db), db, &dbh, l, dpb );
+	isc_attach_database( stat, (short)strlen(db), db, &dbh, l, dpb );
 	ckfree( (char *)dpb );
 	if( stat[0]==1 && stat[1] ) {
 		ib_free_encoding( con );
@@ -355,7 +357,7 @@ int do_ib_exec( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	IB_Statement *st;
 	XSQLDA *xd;
 	isc_stmt_handle stmth;
-	long stat[20], *statp = stat;
+	ISC_STATUS stat[20], *statp = stat;
 	int i;
 
 	if( argc != 3 ) {
@@ -528,7 +530,7 @@ ib_fetch [-name] [-n rows] stmt_handle varname
 int do_ib_fetch( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	IB_ClientData *cd = (IB_ClientData*) cData;
 	IB_Statement *st;
-	long fstat, stat[20], *statp = stat;
+	ISC_STATUS fstat, stat[20], *statp = stat;
 	char *sp, *vp, *buf, vbuf[80];
 	int i, j, num, byname;
 
@@ -635,7 +637,7 @@ ib_fetch2proc [-name] [-n rows] stmt_handler varname proc
 int do_ib_fetch2proc( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	IB_ClientData *cd = (IB_ClientData*) cData;
 	IB_Statement *st;
-	long fstat, stat[20], *statp = stat;
+	ISC_STATUS fstat, stat[20], *statp = stat;
 	char *sp, *vp, *pp, *buf, vbuf[80];
 	int i, j, num, byname;
 
@@ -734,7 +736,7 @@ ib_skip rows stmt_handler
 int do_ib_skip( ClientData cData, Tcl_Interp* ip, int argc, char** argv ) {
 	IB_ClientData *cd = (IB_ClientData*) cData;
 	IB_Statement *st;
-	long fstat, stat[20], *statp = stat;
+	ISC_STATUS fstat, stat[20], *statp = stat;
 	int i, num;
 
 	if( argc!=3 ) {
