@@ -27,6 +27,12 @@ OBJs=ibtcl.o cmd.o id.o
 
 all: $(TARGETS)
 
+check: 
+	cppcheck --enable=all --inconclusive --force \
+		--suppress=varFuncNullUB \
+		--suppress=*:tcl*.h \
+		*.c $(IBFLAGS) $(TCLFLAGS)
+
 testprep:
 	pushd /tmp
 	PATH=$(IBROOT)/bin:$(PATH)
