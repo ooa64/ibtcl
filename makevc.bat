@@ -4,7 +4,7 @@ rem call C:\Program Files\Microsoft Visual Studio 14.0\VC\bin\vcvars32.bat
 
 echo SDK:
 echo %WindowsSdkDir%
-if not exist "%WindowsSdkDir%\lib\kernel32.lib" goto sdkerror
+rem if not exist "%WindowsSdkDir%\lib\kernel32.lib" goto sdkerror
 
 rem fix tailing slash
 if "%WindowsSdkDir:~-1%" == "\" set WindowsSdkDir=%WindowsSdkDir:~0,-1%
@@ -24,7 +24,7 @@ if not "%MSVCRT%" == ""   set OPTS=%OPTS% MSVCRT=%MSVCRT%
 if not "%STATIC%" == ""   set OPTS=%OPTS% STATIC_BUILD=%STATIC%
 set OPTS=%OPTS% USE_TCL_STUBS=1 
 
-nmake -nologo -f makefile.vc USE_TCL_STUBS=1 %OPTS% SDK_CFLAGS="%CFLAGS%" IBROOT="%IBROOT%" TCLROOT="%TCLROOT%" TCLVER="%TCLVER%" %*
+nmake -nologo -f makefile.vc %OPTS% SDK_CFLAGS="%CFLAGS%" IBROOT="%IBROOT%" TCLROOT="%TCLROOT%" TCLVER="%TCLVER%" %*
 
 if not errorlevel 1 goto ok
 echo ERROR: MAKE RRROR

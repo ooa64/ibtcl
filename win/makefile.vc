@@ -17,7 +17,7 @@
 #------------------------------------------------------------------------------
 
 # The name of the package
-PROJECT = Ibtcl
+PROJECT = ibtcl
 DOTVERSION = 0.2.0
 VERSION    = $(DOTVERSION:.=)
 

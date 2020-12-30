@@ -172,6 +172,10 @@ linkXX    = "$(VCINSTALLDIR)\bin\link.exe"
 libXX     = "$(VCINSTALLDIR)\bin\lib.exe"
 !endif
 
+clXX      = cl.exe
+linkXX    = link.exe
+libXX     = lib.exe
+
 #CFLAGS	= $(CFLAGS) -W3 -WX $(DBG_CFLAGS) $(SDK_CFLAGS)
 CFLAGS	= $(CFLAGS) -W3 $(DBG_CFLAGS) $(SDK_CFLAGS)
 LFLAGS  = -subsystem:console -stack:2300000 $(LFLAGS) $(DBG_LFLAGS)
